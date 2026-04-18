@@ -45,7 +45,6 @@
         border-bottom: 1px solid var(--border);
         background: #0d131a;
       }
-      .cell .head .sw { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; align-self: center; }
       .cell .head .name { font-weight: 600; letter-spacing: .3px; font-size: 12px; }
       .cell .head .last { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
       .cell .head .date { margin-left: auto; color: var(--muted); font-size: 11px; }
@@ -65,32 +64,17 @@
 
     <script>
       const SYMBOLS = [
-        { name: "$S5FD", color: "#26a69a" },
-        { name: "$S5TW", color: "#4db6ac" },
-        { name: "$S5FI", color: "#66bb6a" },
-        { name: "$S5OH", color: "#9ccc65" },
-        { name: "$S5TH", color: "#cddc39" },
-        { name: "$NDFD", color: "#42a5f5" },
-        { name: "$NDTW", color: "#5c6bc0" },
-        { name: "$NDFI", color: "#7e57c2" },
-        { name: "$NDOH", color: "#ab47bc" },
-        { name: "$NDTH", color: "#ec407a" },
-        { name: "$NCFD", color: "#ffa726" },
-        { name: "$NCTW", color: "#ff7043" },
-        { name: "$NCFI", color: "#ef5350" },
-        { name: "$NCOH", color: "#f06292" },
-        { name: "$NCTH", color: "#8d6e63" },
+        "$S5FD", "$S5TW", "$S5FI", "$S5OH", "$S5TH",
+        "$NDFD", "$NDTW", "$NDFI", "$NDOH", "$NDTH",
+        "$NCFD", "$NCTW", "$NCFI", "$NCOH", "$NCTH",
       ];
+      const UP = "#26a69a";
+      const DOWN = "#ef5350";
 
       const gridEl = document.getElementById("grid");
       const statusEl = document.getElementById("status");
       const updatedEl = document.getElementById("updated");
       const VISIBLE_BARS = 90;
-
-      function hexToRgba(hex, a) {
-        const n = parseInt(hex.slice(1), 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-      }
 
       function applyRange(sym) {
         if (!sym.barCount) return;
@@ -99,13 +83,12 @@
         else ts.setVisibleLogicalRange({ from: sym.barCount - VISIBLE_BARS, to: sym.barCount - 1 });
       }
 
-      const symbols = SYMBOLS.map(s => {
+      const symbols = SYMBOLS.map(name => {
         const cell = document.createElement("div");
         cell.className = "cell";
         cell.innerHTML = `
           <div class="head">
-            <span class="sw" style="background:${s.color}"></span>
-            <span class="name">${s.name}</span>
+            <span class="name">${name}</span>
             <span class="last">—</span>
             <span class="date">—</span>
           </div>
@@ -121,9 +104,9 @@
           crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
         });
         const series = chart.addCandlestickSeries({
-          upColor: s.color, downColor: hexToRgba(s.color, 0.4),
-          borderUpColor: s.color, borderDownColor: s.color,
-          wickUpColor: s.color, wickDownColor: s.color,
+          upColor: UP, downColor: DOWN,
+          borderUpColor: UP, borderDownColor: DOWN,
+          wickUpColor: UP, wickDownColor: DOWN,
           priceLineVisible: false, lastValueVisible: false,
         });
         const ro = new ResizeObserver(() => {
@@ -132,7 +115,7 @@
         ro.observe(chartEl);
 
         return {
-          name: s.name, chart, series,
+          name, chart, series,
           lastEl: cell.querySelector(".last"),
           dateEl: cell.querySelector(".date"),
           sig: "", barCount: 0,
