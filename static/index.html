@@ -12,133 +12,155 @@
         --panel: #111821;
         --fg: #d7dee6;
         --muted: #7e8a99;
+        --border: #1e2733;
       }
-      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; }
-      header { padding: 10px 16px; border-bottom: 1px solid #1e2733; background: var(--panel); }
-      .row1 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-      h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .5px; }
-      .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 12px; }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px/1.4 system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
+
+      header { padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .4px; }
+      .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 11px; }
       .pill.ok { color: #26a69a; }
       .pill.err { color: #ef5350; }
-      .updated { margin-left: auto; color: var(--muted); font-size: 12px; }
-      .updated b { color: var(--fg); font-weight: 600; }
-      .groups { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-      .group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .group > .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-right: 2px; }
-      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 4px; background: #1a2431; color: var(--fg); font-size: 12px; cursor: pointer; user-select: none; transition: opacity .12s; }
-      .chip.off { opacity: .35; }
-      .chip .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-      .chip .last { color: var(--muted); font-variant-numeric: tabular-nums; }
-      .controls { display: flex; gap: 6px; margin-left: 4px; }
-      .btn { padding: 2px 8px; border-radius: 4px; background: #1a2431; color: var(--muted); font-size: 11px; cursor: pointer; border: 1px solid #1e2733; }
+      .controls { display: flex; gap: 6px; }
+      .btn { padding: 3px 9px; border-radius: 4px; background: #1a2431; color: var(--muted); font-size: 11px; cursor: pointer; border: 1px solid var(--border); }
       .btn:hover { color: var(--fg); }
-      #chart { position: absolute; left: 0; right: 0; bottom: 0; top: 120px; }
-      @media (max-width: 1100px) { #chart { top: 170px; } }
+      .btn.active { color: var(--fg); background: #22303f; }
+      .updated { margin-left: auto; color: var(--muted); font-size: 11px; }
+      .updated b { color: var(--fg); font-weight: 600; }
+
+      main { flex: 1 1 auto; min-height: 0; }
+      #grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-auto-rows: minmax(220px, 1fr);
+        gap: 1px;
+        background: var(--border);
+        width: 100%;
+        height: 100%;
+      }
+      @media (max-width: 1200px) { #grid { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 720px)  { #grid { grid-template-columns: 1fr; } }
+
+      .cell { background: var(--bg); position: relative; display: flex; flex-direction: column; overflow: hidden; }
+      .cell .head {
+        display: flex; align-items: baseline; gap: 6px;
+        padding: 5px 10px;
+        border-bottom: 1px solid var(--border);
+        background: #0d131a;
+      }
+      .cell .head .sw { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; align-self: center; }
+      .cell .head .name { font-weight: 600; letter-spacing: .3px; font-size: 12px; }
+      .cell .head .last { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+      .cell .head .date { margin-left: auto; color: var(--muted); font-size: 11px; }
+      .cell .chart { flex: 1 1 auto; min-height: 0; }
     </style>
   </head>
   <body>
     <header>
-      <div class="row1">
-        <h1>Market Breadth — % above MA (daily)</h1>
-        <span id="status" class="pill">loading…</span>
-        <div class="controls">
-          <span class="btn" data-action="all">show all</span>
-          <span class="btn" data-action="none">hide all</span>
-        </div>
-        <div class="updated">updated <b id="updated">—</b></div>
+      <h1>Market Breadth — % stocks above MA (daily)</h1>
+      <span id="status" class="pill">loading…</span>
+      <div class="controls" id="ranges">
+        <span class="btn" data-range="30">30d</span>
+        <span class="btn active" data-range="90">90d</span>
+        <span class="btn" data-range="180">180d</span>
+        <span class="btn" data-range="365">1y</span>
+        <span class="btn" data-range="0">all</span>
       </div>
-      <div id="groups" class="groups"></div>
+      <div class="updated">updated <b id="updated">—</b></div>
     </header>
-    <div id="chart"></div>
+
+    <main>
+      <div id="grid"></div>
+    </main>
 
     <script>
-      const CONFIG = [
-        // S&P 500 — green/lime family
-        { group: "S&P 500",    name: "$S5FD", color: "#26a69a" },
-        { group: "S&P 500",    name: "$S5TW", color: "#4db6ac" },
-        { group: "S&P 500",    name: "$S5FI", color: "#66bb6a" },
-        { group: "S&P 500",    name: "$S5OH", color: "#9ccc65" },
-        { group: "S&P 500",    name: "$S5TH", color: "#cddc39" },
-        // Nasdaq 100 — blue/magenta family
-        { group: "Nasdaq 100", name: "$NDFD", color: "#42a5f5" },
-        { group: "Nasdaq 100", name: "$NDTW", color: "#5c6bc0" },
-        { group: "Nasdaq 100", name: "$NDFI", color: "#7e57c2" },
-        { group: "Nasdaq 100", name: "$NDOH", color: "#ab47bc" },
-        { group: "Nasdaq 100", name: "$NDTH", color: "#ec407a" },
-        // NYSE Composite — orange/brown family
-        { group: "NYSE",       name: "$NCFD", color: "#ffa726" },
-        { group: "NYSE",       name: "$NCTW", color: "#ff7043" },
-        { group: "NYSE",       name: "$NCFI", color: "#ef5350" },
-        { group: "NYSE",       name: "$NCOH", color: "#f06292" },
-        { group: "NYSE",       name: "$NCTH", color: "#8d6e63" },
+      const SYMBOLS = [
+        { name: "$S5FD", color: "#26a69a" },
+        { name: "$S5TW", color: "#4db6ac" },
+        { name: "$S5FI", color: "#66bb6a" },
+        { name: "$S5OH", color: "#9ccc65" },
+        { name: "$S5TH", color: "#cddc39" },
+        { name: "$NDFD", color: "#42a5f5" },
+        { name: "$NDTW", color: "#5c6bc0" },
+        { name: "$NDFI", color: "#7e57c2" },
+        { name: "$NDOH", color: "#ab47bc" },
+        { name: "$NDTH", color: "#ec407a" },
+        { name: "$NCFD", color: "#ffa726" },
+        { name: "$NCTW", color: "#ff7043" },
+        { name: "$NCFI", color: "#ef5350" },
+        { name: "$NCOH", color: "#f06292" },
+        { name: "$NCTH", color: "#8d6e63" },
       ];
 
+      const gridEl = document.getElementById("grid");
       const statusEl = document.getElementById("status");
       const updatedEl = document.getElementById("updated");
-      const groupsEl = document.getElementById("groups");
-
-      const chart = LightweightCharts.createChart(document.getElementById("chart"), {
-        layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6" },
-        grid: { vertLines: { color: "#18222e" }, horzLines: { color: "#18222e" } },
-        rightPriceScale: { borderColor: "#1e2733" },
-        timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-      });
-      window.addEventListener("resize", () => chart.applyOptions({}));
+      let visibleBars = 90;
 
       function hexToRgba(hex, a) {
         const n = parseInt(hex.slice(1), 16);
         return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
       }
 
-      // Group chips by index
-      const groupEls = {};
-      for (const c of CONFIG) {
-        if (!groupEls[c.group]) {
-          const wrap = document.createElement("div");
-          wrap.className = "group";
-          const label = document.createElement("span");
-          label.className = "label";
-          label.textContent = c.group;
-          wrap.appendChild(label);
-          groupsEl.appendChild(wrap);
-          groupEls[c.group] = wrap;
+      function applyRange(sym) {
+        if (!sym.barCount) return;
+        const ts = sym.chart.timeScale();
+        if (visibleBars <= 0 || visibleBars >= sym.barCount) {
+          ts.fitContent();
+        } else {
+          ts.setVisibleLogicalRange({ from: sym.barCount - visibleBars, to: sym.barCount - 1 });
         }
       }
 
-      const symbols = CONFIG.map(c => {
-        const down = hexToRgba(c.color, 0.35);
+      const symbols = SYMBOLS.map(s => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.innerHTML = `
+          <div class="head">
+            <span class="sw" style="background:${s.color}"></span>
+            <span class="name">${s.name}</span>
+            <span class="last">—</span>
+            <span class="date">—</span>
+          </div>
+          <div class="chart"></div>`;
+        gridEl.appendChild(cell);
+
+        const chartEl = cell.querySelector(".chart");
+        const chart = LightweightCharts.createChart(chartEl, {
+          layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6", fontSize: 10 },
+          grid: { vertLines: { color: "#141c26" }, horzLines: { color: "#141c26" } },
+          rightPriceScale: { borderColor: "#1e2733" },
+          timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
+          crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        });
         const series = chart.addCandlestickSeries({
-          upColor: c.color, downColor: down,
-          borderUpColor: c.color, borderDownColor: c.color,
-          wickUpColor: c.color, wickDownColor: c.color,
+          upColor: s.color, downColor: hexToRgba(s.color, 0.4),
+          borderUpColor: s.color, borderDownColor: s.color,
+          wickUpColor: s.color, wickDownColor: s.color,
           priceLineVisible: false, lastValueVisible: false,
         });
-
-        const chip = document.createElement("span");
-        chip.className = "chip";
-        chip.innerHTML = `<span class="sw" style="background:${c.color}"></span>${c.name} <span class="last">—</span>`;
-        groupEls[c.group].appendChild(chip);
-        const lastEl = chip.querySelector(".last");
-
-        const sym = { name: c.name, series, chip, lastEl, sig: "", visible: true };
-        chip.addEventListener("click", () => {
-          sym.visible = !sym.visible;
-          sym.series.applyOptions({ visible: sym.visible });
-          chip.classList.toggle("off", !sym.visible);
+        const ro = new ResizeObserver(() => {
+          chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight });
         });
-        return sym;
+        ro.observe(chartEl);
+
+        return {
+          name: s.name, chart, series,
+          lastEl: cell.querySelector(".last"),
+          dateEl: cell.querySelector(".date"),
+          sig: "", barCount: 0,
+        };
       });
 
-      document.querySelector('[data-action="all"]').addEventListener("click", () => {
-        for (const s of symbols) { s.visible = true; s.series.applyOptions({ visible: true }); s.chip.classList.remove("off"); }
+      document.querySelectorAll("#ranges .btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#ranges .btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          visibleBars = parseInt(btn.dataset.range, 10);
+          for (const s of symbols) applyRange(s);
+        });
       });
-      document.querySelector('[data-action="none"]').addEventListener("click", () => {
-        for (const s of symbols) { s.visible = false; s.series.applyOptions({ visible: false }); s.chip.classList.add("off"); }
-      });
-
-      let autoFit = true;
-      chart.timeScale().subscribeVisibleLogicalRangeChange(() => { autoFit = false; });
 
       function parseCsv(text) {
         const bars = [];
@@ -175,15 +197,17 @@
         const sig = bars.length + "|" + last.time + "|" + last.close;
         if (sig !== sym.sig) {
           sym.series.setData(bars);
+          sym.barCount = bars.length;
+          applyRange(sym);
           sym.sig = sig;
           sym.lastEl.textContent = last.close.toFixed(1);
+          sym.dateEl.textContent = last.time;
         }
       }
 
       async function tick() {
         const results = await Promise.allSettled(symbols.map(fetchOne));
         const failed = results.filter(r => r.status === "rejected");
-        if (autoFit) chart.timeScale().fitContent();
         updatedEl.textContent = new Date().toLocaleTimeString();
         if (failed.length === 0) setStatus("ok", "live");
         else if (failed.length < symbols.length) setStatus("ok", `live (${failed.length} failed)`);
