@@ -10,7 +10,11 @@ import time
 
 BARCHART_HOME = "https://www.barchart.com/"
 BARCHART_BASE = "https://www.barchart.com/proxies/timeseries/historical/queryeod.ashx"
-ALLOWED_SYMBOLS = {"$S5FD", "$S5TW", "$S5FI", "$S5OH", "$S5TH"}
+ALLOWED_SYMBOLS = {
+    "$S5FD", "$S5TW", "$S5FI", "$S5OH", "$S5TH",
+    "$NDFD", "$NDTW", "$NDFI", "$NDOH", "$NDTH",
+    "$NCFD", "$NCTW", "$NCFI", "$NCOH", "$NCTH",
+}
 
 def _build_url(symbol):
     q = urllib.parse.urlencode({

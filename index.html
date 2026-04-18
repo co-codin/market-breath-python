@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>S&amp;P 500 Breadth — Live Candles</title>
+    <title>Market Breadth — Live Candles</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
@@ -13,46 +13,69 @@
         --fg: #d7dee6;
         --muted: #7e8a99;
       }
-      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
-      header { display: flex; align-items: center; gap: 12px 16px; padding: 10px 16px; border-bottom: 1px solid #1e2733; background: var(--panel); flex-wrap: wrap; }
-      header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .5px; }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; }
+      header { padding: 10px 16px; border-bottom: 1px solid #1e2733; background: var(--panel); }
+      .row1 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+      h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .5px; }
       .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 12px; }
       .pill.ok { color: #26a69a; }
       .pill.err { color: #ef5350; }
-      .legend, .stats { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; color: var(--muted); }
-      .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
-      .legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
-      .stats { margin-left: auto; }
-      .stats b { color: var(--fg); font-weight: 600; }
-      #chart { position: absolute; left: 0; right: 0; top: 68px; bottom: 0; }
-      @media (max-width: 900px) { #chart { top: 110px; } }
+      .updated { margin-left: auto; color: var(--muted); font-size: 12px; }
+      .updated b { color: var(--fg); font-weight: 600; }
+      .groups { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+      .group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .group > .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-right: 2px; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 4px; background: #1a2431; color: var(--fg); font-size: 12px; cursor: pointer; user-select: none; transition: opacity .12s; }
+      .chip.off { opacity: .35; }
+      .chip .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+      .chip .last { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .controls { display: flex; gap: 6px; margin-left: 4px; }
+      .btn { padding: 2px 8px; border-radius: 4px; background: #1a2431; color: var(--muted); font-size: 11px; cursor: pointer; border: 1px solid #1e2733; }
+      .btn:hover { color: var(--fg); }
+      #chart { position: absolute; left: 0; right: 0; bottom: 0; top: 120px; }
+      @media (max-width: 1100px) { #chart { top: 170px; } }
     </style>
   </head>
   <body>
     <header>
-      <h1>S&amp;P 500 Breadth — Daily Candles</h1>
-      <div id="legend" class="legend"></div>
-      <span id="status" class="pill">loading…</span>
-      <div id="stats" class="stats"></div>
+      <div class="row1">
+        <h1>Market Breadth — % above MA (daily)</h1>
+        <span id="status" class="pill">loading…</span>
+        <div class="controls">
+          <span class="btn" data-action="all">show all</span>
+          <span class="btn" data-action="none">hide all</span>
+        </div>
+        <div class="updated">updated <b id="updated">—</b></div>
+      </div>
+      <div id="groups" class="groups"></div>
     </header>
     <div id="chart"></div>
 
     <script>
       const CONFIG = [
-        { name: "$S5FD", up: "#26a69a", down: "#ef5350" },
-        { name: "$S5TW", up: "#42a5f5", down: "#ffb74d" },
-        { name: "$S5FI", up: "#ab47bc", down: "#ffee58" },
-        { name: "$S5OH", up: "#ec407a", down: "#26c6da" },
-        { name: "$S5TH", up: "#9ccc65", down: "#ff7043" },
+        // S&P 500 — green/lime family
+        { group: "S&P 500",    name: "$S5FD", color: "#26a69a" },
+        { group: "S&P 500",    name: "$S5TW", color: "#4db6ac" },
+        { group: "S&P 500",    name: "$S5FI", color: "#66bb6a" },
+        { group: "S&P 500",    name: "$S5OH", color: "#9ccc65" },
+        { group: "S&P 500",    name: "$S5TH", color: "#cddc39" },
+        // Nasdaq 100 — blue/magenta family
+        { group: "Nasdaq 100", name: "$NDFD", color: "#42a5f5" },
+        { group: "Nasdaq 100", name: "$NDTW", color: "#5c6bc0" },
+        { group: "Nasdaq 100", name: "$NDFI", color: "#7e57c2" },
+        { group: "Nasdaq 100", name: "$NDOH", color: "#ab47bc" },
+        { group: "Nasdaq 100", name: "$NDTH", color: "#ec407a" },
+        // NYSE Composite — orange/brown family
+        { group: "NYSE",       name: "$NCFD", color: "#ffa726" },
+        { group: "NYSE",       name: "$NCTW", color: "#ff7043" },
+        { group: "NYSE",       name: "$NCFI", color: "#ef5350" },
+        { group: "NYSE",       name: "$NCOH", color: "#f06292" },
+        { group: "NYSE",       name: "$NCTH", color: "#8d6e63" },
       ];
 
       const statusEl = document.getElementById("status");
-      const legendEl = document.getElementById("legend");
-      const statsEl = document.getElementById("stats");
-      const updatedEl = document.createElement("span");
-      updatedEl.innerHTML = "updated <b id=\"updated-b\">—</b>";
-      statsEl.appendChild(updatedEl);
-      const updatedB = updatedEl.querySelector("b");
+      const updatedEl = document.getElementById("updated");
+      const groupsEl = document.getElementById("groups");
 
       const chart = LightweightCharts.createChart(document.getElementById("chart"), {
         layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6" },
@@ -63,23 +86,55 @@
       });
       window.addEventListener("resize", () => chart.applyOptions({}));
 
+      function hexToRgba(hex, a) {
+        const n = parseInt(hex.slice(1), 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+      }
+
+      // Group chips by index
+      const groupEls = {};
+      for (const c of CONFIG) {
+        if (!groupEls[c.group]) {
+          const wrap = document.createElement("div");
+          wrap.className = "group";
+          const label = document.createElement("span");
+          label.className = "label";
+          label.textContent = c.group;
+          wrap.appendChild(label);
+          groupsEl.appendChild(wrap);
+          groupEls[c.group] = wrap;
+        }
+      }
+
       const symbols = CONFIG.map(c => {
+        const down = hexToRgba(c.color, 0.35);
+        const series = chart.addCandlestickSeries({
+          upColor: c.color, downColor: down,
+          borderUpColor: c.color, borderDownColor: c.color,
+          wickUpColor: c.color, wickDownColor: c.color,
+          priceLineVisible: false, lastValueVisible: false,
+        });
+
         const chip = document.createElement("span");
         chip.className = "chip";
-        chip.innerHTML = `<span class="sw" style="background:${c.up}"></span><span class="sw" style="background:${c.down}"></span>${c.name}`;
-        legendEl.appendChild(chip);
+        chip.innerHTML = `<span class="sw" style="background:${c.color}"></span>${c.name} <span class="last">—</span>`;
+        groupEls[c.group].appendChild(chip);
+        const lastEl = chip.querySelector(".last");
 
-        const stat = document.createElement("span");
-        stat.innerHTML = `${c.name} <b>—</b>`;
-        statsEl.insertBefore(stat, updatedEl);
-        const statB = stat.querySelector("b");
-
-        const series = chart.addCandlestickSeries({
-          upColor: c.up, downColor: c.down,
-          borderUpColor: c.up, borderDownColor: c.down,
-          wickUpColor: c.up, wickDownColor: c.down,
+        const sym = { name: c.name, series, chip, lastEl, sig: "", visible: true };
+        chip.addEventListener("click", () => {
+          sym.visible = !sym.visible;
+          sym.series.applyOptions({ visible: sym.visible });
+          chip.classList.toggle("off", !sym.visible);
         });
-        return { name: c.name, series, statB, sig: "" };
+        return sym;
+      });
+
+      document.querySelector('[data-action="all"]').addEventListener("click", () => {
+        for (const s of symbols) { s.visible = true; s.series.applyOptions({ visible: true }); s.chip.classList.remove("off"); }
+      });
+      document.querySelector('[data-action="none"]').addEventListener("click", () => {
+        for (const s of symbols) { s.visible = false; s.series.applyOptions({ visible: false }); s.chip.classList.add("off"); }
       });
 
       let autoFit = true;
@@ -121,7 +176,7 @@
         if (sig !== sym.sig) {
           sym.series.setData(bars);
           sym.sig = sig;
-          sym.statB.textContent = last.close.toFixed(2) + " (" + last.time + ")";
+          sym.lastEl.textContent = last.close.toFixed(1);
         }
       }
 
@@ -129,7 +184,7 @@
         const results = await Promise.allSettled(symbols.map(fetchOne));
         const failed = results.filter(r => r.status === "rejected");
         if (autoFit) chart.timeScale().fitContent();
-        updatedB.textContent = new Date().toLocaleTimeString();
+        updatedEl.textContent = new Date().toLocaleTimeString();
         if (failed.length === 0) setStatus("ok", "live");
         else if (failed.length < symbols.length) setStatus("ok", `live (${failed.length} failed)`);
         else setStatus("err", "error: " + failed[0].reason.message);
