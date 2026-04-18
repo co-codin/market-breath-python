@@ -2,13 +2,16 @@ IMAGE   ?= barchart-candles
 SERVICE ?= barchart
 PORT    ?= 8000
 
-.PHONY: help run build up down restart logs shell ps clean
+.PHONY: help run install build up down restart logs shell ps clean
 
 help:
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 run: ## Run the server locally (no Docker)
-	HOST=127.0.0.1 PORT=$(PORT) python3 server.py
+	HOST=127.0.0.1 PORT=$(PORT) uvicorn app.main:app --host 127.0.0.1 --port $(PORT) --reload
+
+install: ## Install Python deps into the active environment
+	pip install -r requirements.txt
 
 build: ## Build the Docker image
 	docker compose build
