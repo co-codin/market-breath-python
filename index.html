@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>S&amp;P 500 Breadth — Live Candles</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: #111821;
+        --fg: #d7dee6;
+        --muted: #7e8a99;
+      }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+      header { display: flex; align-items: center; gap: 12px 16px; padding: 10px 16px; border-bottom: 1px solid #1e2733; background: var(--panel); flex-wrap: wrap; }
+      header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .5px; }
+      .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 12px; }
+      .pill.ok { color: #26a69a; }
+      .pill.err { color: #ef5350; }
+      .legend, .stats { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; font-size: 12px; color: var(--muted); }
+      .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+      .legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+      .stats { margin-left: auto; }
+      .stats b { color: var(--fg); font-weight: 600; }
+      #chart { position: absolute; left: 0; right: 0; top: 68px; bottom: 0; }
+      @media (max-width: 900px) { #chart { top: 110px; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>S&amp;P 500 Breadth — Daily Candles</h1>
+      <div id="legend" class="legend"></div>
+      <span id="status" class="pill">loading…</span>
+      <div id="stats" class="stats"></div>
+    </header>
+    <div id="chart"></div>
+
+    <script>
+      const CONFIG = [
+        { name: "$S5FD", up: "#26a69a", down: "#ef5350" },
+        { name: "$S5TW", up: "#42a5f5", down: "#ffb74d" },
+        { name: "$S5FI", up: "#ab47bc", down: "#ffee58" },
+        { name: "$S5OH", up: "#ec407a", down: "#26c6da" },
+        { name: "$S5TH", up: "#9ccc65", down: "#ff7043" },
+      ];
+
+      const statusEl = document.getElementById("status");
+      const legendEl = document.getElementById("legend");
+      const statsEl = document.getElementById("stats");
+      const updatedEl = document.createElement("span");
+      updatedEl.innerHTML = "updated <b id=\"updated-b\">—</b>";
+      statsEl.appendChild(updatedEl);
+      const updatedB = updatedEl.querySelector("b");
+
+      const chart = LightweightCharts.createChart(document.getElementById("chart"), {
+        layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6" },
+        grid: { vertLines: { color: "#18222e" }, horzLines: { color: "#18222e" } },
+        rightPriceScale: { borderColor: "#1e2733" },
+        timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      });
+      window.addEventListener("resize", () => chart.applyOptions({}));
+
+      const symbols = CONFIG.map(c => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.innerHTML = `<span class="sw" style="background:${c.up}"></span><span class="sw" style="background:${c.down}"></span>${c.name}`;
+        legendEl.appendChild(chip);
+
+        const stat = document.createElement("span");
+        stat.innerHTML = `${c.name} <b>—</b>`;
+        statsEl.insertBefore(stat, updatedEl);
+        const statB = stat.querySelector("b");
+
+        const series = chart.addCandlestickSeries({
+          upColor: c.up, downColor: c.down,
+          borderUpColor: c.up, borderDownColor: c.down,
+          wickUpColor: c.up, wickDownColor: c.down,
+        });
+        return { name: c.name, series, statB, sig: "" };
+      });
+
+      let autoFit = true;
+      chart.timeScale().subscribeVisibleLogicalRangeChange(() => { autoFit = false; });
+
+      function parseCsv(text) {
+        const bars = [];
+        const seen = new Set();
+        for (const raw of text.split(/\r?\n/)) {
+          const line = raw.trim();
+          if (!line) continue;
+          const p = line.split(",");
+          if (p.length < 6) continue;
+          const date = p[1];
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+          if (seen.has(date)) continue;
+          seen.add(date);
+          const o = +p[2], h = +p[3], l = +p[4], c = +p[5];
+          if ([o, h, l, c].some(n => !Number.isFinite(n))) continue;
+          bars.push({ time: date, open: o, high: h, low: l, close: c });
+        }
+        bars.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+        return bars;
+      }
+
+      function setStatus(kind, msg) {
+        statusEl.className = "pill " + kind;
+        statusEl.textContent = msg;
+      }
+
+      async function fetchOne(sym) {
+        const url = "/api/data?symbol=" + encodeURIComponent(sym.name) + "&_=" + Date.now();
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(sym.name + " HTTP " + res.status);
+        const bars = parseCsv(await res.text());
+        if (!bars.length) throw new Error(sym.name + " no bars");
+        const last = bars[bars.length - 1];
+        const sig = bars.length + "|" + last.time + "|" + last.close;
+        if (sig !== sym.sig) {
+          sym.series.setData(bars);
+          sym.sig = sig;
+          sym.statB.textContent = last.close.toFixed(2) + " (" + last.time + ")";
+        }
+      }
+
+      async function tick() {
+        const results = await Promise.allSettled(symbols.map(fetchOne));
+        const failed = results.filter(r => r.status === "rejected");
+        if (autoFit) chart.timeScale().fitContent();
+        updatedB.textContent = new Date().toLocaleTimeString();
+        if (failed.length === 0) setStatus("ok", "live");
+        else if (failed.length < symbols.length) setStatus("ok", `live (${failed.length} failed)`);
+        else setStatus("err", "error: " + failed[0].reason.message);
+      }
+
+      tick();
+      setInterval(tick, 5000);
+    </script>
+  </body>
+</html>
