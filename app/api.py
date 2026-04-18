@@ -1,32 +1,32 @@
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .barchart import BarchartClient
 from .config import ALLOWED_SYMBOLS
+from .db import SessionLocal
+from .repository import list_bars
 
 router = APIRouter(prefix="/api")
 
 
-def get_barchart(request: Request) -> BarchartClient:
-    return request.app.state.barchart
+async def get_session():
+    async with SessionLocal() as session:
+        yield session
 
 
 @router.get("/data")
 async def data(
     symbol: str = Query(default="$S5FD"),
-    client: BarchartClient = Depends(get_barchart),
+    session: AsyncSession = Depends(get_session),
 ) -> Response:
     if symbol not in ALLOWED_SYMBOLS:
         raise HTTPException(status_code=400, detail="symbol not allowed")
-    try:
-        status, body = await client.fetch_csv(symbol)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=f"upstream error: {e}")
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"proxy error: {e}")
+    bars = await list_bars(session, symbol)
+    lines = [
+        f"{b.symbol},{b.date.isoformat()},{b.open},{b.high},{b.low},{b.close},{b.volume}"
+        for b in bars
+    ]
     return Response(
-        content=body,
-        status_code=status,
+        content=("\n".join(lines) + "\n").encode("utf-8"),
         media_type="text/csv; charset=utf-8",
         headers={"Cache-Control": "no-store"},
     )

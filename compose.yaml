@@ -1,8 +1,36 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: barchart-db
+    environment:
+      POSTGRES_USER: barchart
+      POSTGRES_PASSWORD: barchart
+      POSTGRES_DB: barchart
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U barchart -d barchart"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   barchart:
     build: .
     image: barchart-candles
     container_name: barchart-candles
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://barchart:barchart@db:5432/barchart
+      SYNC_INTERVAL_SECONDS: "300"
+    volumes:
+      - ./static:/app/static:ro
+      - ./app:/app/app:ro
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  pgdata:
