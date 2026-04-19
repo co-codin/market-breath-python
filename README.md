@@ -28,9 +28,15 @@ N-day moving average":
 With Docker Compose (recommended):
 
 ```bash
-docker compose up -d          # build + start app and redis on http://localhost:8000
+cp .env.example .env          # fill in secrets for Postgres / app
+docker compose up -d          # build + start db/redis/app on http://localhost:8000
 docker compose down           # stop
 ```
+
+Migrations (`alembic upgrade head`) run automatically on app startup. The
+container exposes `/healthz` and compose uses it as the healthcheck, so
+`docker compose up --wait` won't return until the cache is warm and both
+Postgres + Redis are reachable.
 
 Locally (requires Python 3.12+ and a reachable Redis):
 
@@ -92,15 +98,18 @@ app/
   __main__.py        # `python -m app` → uvicorn entry
   config.py          # env, allow-listed symbols, query defaults, session/DB urls
   barchart.py        # async cookie-primed httpx client (BarchartClient)
-  db.py              # async SQLAlchemy engine + DeclarativeBase + init_db
+  db.py              # async engine + DeclarativeBase; init_db runs alembic upgrade
   models.py          # User(id, email, password_hash, created_at)
   repository.py      # redis-backed set_bars / list_bars
-  security.py        # bcrypt hash/verify + redis-backed session helpers
+  security.py        # bcrypt hash/verify + redis-backed sessions + rate limiter
   auth.py            # /api/auth/{register,login,logout,me}
+  health.py          # /healthz — pings Postgres and Redis
   tasks.py           # background sync_loop → cache all symbols every N sec
   api.py             # FastAPI router: GET /api/data + SSE at /api/events
   events.py          # in-process pub/sub for sync notifications
   main.py            # FastAPI app + lifespan + auth middleware + static mount
+migrations/          # alembic migrations; `versions/` holds the revision files
+alembic.ini          # alembic config (script_location = migrations)
 static/
   index.html         # public landing page with cards for each dashboard
   login/index.html   # sign-in form
@@ -160,14 +169,32 @@ make test
 The rate-limit test needs to reach Redis directly — `compose.yaml` exposes
 Redis on `127.0.0.1:6379` for that purpose.
 
+## Migrations
+
+Schema is managed by Alembic (`alembic.ini`, `migrations/`). `init_db()` runs
+`alembic upgrade head` on app startup, so the container always boots at the
+latest revision.
+
+Generate a new migration after editing a SQLAlchemy model:
+
+```bash
+make migration name="add last_login to users"    # → migrations/versions/…
+make migrate                                     # applies it (idempotent)
+```
+
 ## Configuration
 
-| Env var                 | Default                    | Notes                                           |
+Copy `.env.example` to `.env` and edit. `.env` is gitignored.
+
+| Env var                 | Default in `.env.example`  | Notes                                           |
 |-------------------------|----------------------------|-------------------------------------------------|
 | `HOST`                  | `127.0.0.1`                | Set to `0.0.0.0` inside Docker                  |
 | `PORT`                  | `8000`                     |                                                 |
-| `REDIS_URL`             | `redis://localhost:6379/0` | Compose overrides host to `redis`               |
-| `DATABASE_URL`          | `postgresql+asyncpg://barchart:barchart@localhost:5432/barchart` | Compose overrides host to `db`                  |
+| `POSTGRES_USER`         | `barchart`                 | Postgres role                                   |
+| `POSTGRES_PASSWORD`     | `barchart`                 | **Change this for non-local use**               |
+| `POSTGRES_DB`           | `barchart`                 | Postgres database name                          |
+| `DATABASE_URL`          | `postgresql+asyncpg://…@db:5432/…` | Compose host is `db`                    |
+| `REDIS_URL`             | `redis://redis:6379/0`     | Compose host is `redis`                         |
 | `SESSION_TTL_SECONDS`   | `604800` (7 days)          | Session cookie + Redis TTL; sliding on each hit |
 | `SYNC_INTERVAL_SECONDS` | `3600`                     | How often the background task hits Barchart     |
 

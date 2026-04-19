@@ -11,13 +11,14 @@ from .auth import router as auth_router
 from .barchart import BarchartClient
 from .config import SESSION_COOKIE
 from .db import close_db, init_db
+from .health import router as health_router
 from .repository import close_redis
 from .security import get_session
 from .tasks import sync_all, sync_loop
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-PUBLIC_PATHS = {"/", "/favicon.ico", "/login", "/login/", "/register", "/register/"}
+PUBLIC_PATHS = {"/", "/favicon.ico", "/healthz", "/login", "/login/", "/register", "/register/"}
 PUBLIC_PREFIXES = ("/api/auth/",)
 
 
@@ -66,6 +67,7 @@ async def auth_gate(request: Request, call_next):
     return await call_next(request)
 
 
+app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(api_router)
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt
 
 COPY app ./app
 COPY static ./static
+COPY alembic.ini ./alembic.ini
+COPY migrations ./migrations
 
 ENV HOST=0.0.0.0 PORT=8000 PYTHONUNBUFFERED=1
 EXPOSE 8000
