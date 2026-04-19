@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Market Breadth — Live Candles</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: #111821;
+        --fg: #d7dee6;
+        --muted: #7e8a99;
+        --border: #1e2733;
+        --up: #26a69a;
+        --down: #ef5350;
+      }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px/1.4 system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
+
+      header { padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      header .back { text-decoration: none; color: var(--muted); font-size: 16px; padding: 0 6px; border-radius: 4px; }
+      header .back:hover { color: var(--fg); background: #1a2431; }
+      header .who { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+      header .logout { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+      header .logout:hover { color: var(--fg); border-color: var(--fg); }
+      h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .4px; }
+      .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 11px; }
+      .pill.ok { color: var(--up); }
+      .pill.err { color: var(--down); }
+      .updated { margin-left: auto; color: var(--muted); font-size: 11px; }
+      .updated b { color: var(--fg); font-weight: 600; }
+
+      main { flex: 1 1 auto; min-height: 0; padding: 8px; }
+      #grid {
+        display: grid;
+        grid-template-columns: 90px repeat(5, minmax(0, 1fr));
+        grid-template-rows: 28px repeat(3, minmax(220px, 1fr));
+        gap: 1px;
+        background: var(--border);
+        border: 1px solid var(--border);
+        width: 100%;
+        height: 100%;
+      }
+
+      .corner, .col-head, .row-head {
+        background: var(--panel);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .row-head { writing-mode: vertical-rl; transform: rotate(180deg); }
+
+      .cell { background: var(--bg); position: relative; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+      .cell .head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--border);
+        background: #0d131a;
+      }
+      .cell .head .name { font-weight: 600; letter-spacing: .3px; font-size: 11px; color: var(--fg); }
+      .cell .head .date { color: var(--muted); font-size: 10px; margin-left: auto; font-variant-numeric: tabular-nums; }
+      .badge {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background: #1a2431;
+        color: var(--muted);
+        min-width: 34px;
+        text-align: center;
+      }
+      .badge.up { color: var(--up); background: rgba(38, 166, 154, 0.12); }
+      .badge.down { color: var(--down); background: rgba(239, 83, 80, 0.12); }
+      .cell .chart { flex: 1 1 auto; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="back" title="Back to dashboards">←</a>
+      <h1>Market Breadth — % stocks above moving average (daily)</h1>
+      <span id="status" class="pill">loading…</span>
+      <div class="updated">updated <b id="updated">—</b></div>
+      <span id="who" class="who"></span>
+      <button id="logout" class="logout" type="button">Sign out</button>
+    </header>
+
+    <main>
+      <div id="grid"></div>
+    </main>
+
+    <script>
+      const PERIODS = [
+        { key: "FD", label: "5-day" },
+        { key: "TW", label: "20-day" },
+        { key: "FI", label: "50-day" },
+        { key: "OH", label: "100-day" },
+        { key: "TH", label: "200-day" },
+      ];
+      const INDEXES = [
+        { label: "S&P 500",    prefix: "$S5" },
+        { label: "Nasdaq 100", prefix: "$ND" },
+        { label: "NYSE",       prefix: "$NC" },
+      ];
+      const UP = "#26a69a";
+      const DOWN = "#ef5350";
+      const VISIBLE_BARS = 90;
+
+      const gridEl = document.getElementById("grid");
+      const statusEl = document.getElementById("status");
+      const updatedEl = document.getElementById("updated");
+
+      gridEl.appendChild(Object.assign(document.createElement("div"), { className: "corner" }));
+      for (const p of PERIODS) {
+        const h = document.createElement("div");
+        h.className = "col-head";
+        h.textContent = p.label;
+        gridEl.appendChild(h);
+      }
+
+      const symbols = [];
+      for (const idx of INDEXES) {
+        const rh = document.createElement("div");
+        rh.className = "row-head";
+        rh.textContent = idx.label;
+        gridEl.appendChild(rh);
+
+        for (const p of PERIODS) {
+          const name = idx.prefix + p.key;
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.innerHTML = `
+            <div class="head">
+              <span class="name">${name}</span>
+              <span class="badge">—</span>
+              <span class="date">—</span>
+            </div>
+            <div class="chart"></div>`;
+          gridEl.appendChild(cell);
+
+          const chartEl = cell.querySelector(".chart");
+          const chart = LightweightCharts.createChart(chartEl, {
+            layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6", fontSize: 10 },
+            grid: { vertLines: { color: "#141c26" }, horzLines: { color: "#141c26" } },
+            rightPriceScale: { borderColor: "#1e2733" },
+            timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+          });
+          const series = chart.addCandlestickSeries({
+            upColor: UP, downColor: DOWN,
+            borderUpColor: UP, borderDownColor: DOWN,
+            wickUpColor: UP, wickDownColor: DOWN,
+            priceLineVisible: false, lastValueVisible: false,
+          });
+          const ro = new ResizeObserver(() => {
+            chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight });
+          });
+          ro.observe(chartEl);
+
+          symbols.push({
+            name, chart, series,
+            badgeEl: cell.querySelector(".badge"),
+            dateEl: cell.querySelector(".date"),
+            sig: "", barCount: 0,
+          });
+        }
+      }
+
+      function applyRange(sym) {
+        if (!sym.barCount) return;
+        const ts = sym.chart.timeScale();
+        if (VISIBLE_BARS >= sym.barCount) ts.fitContent();
+        else ts.setVisibleLogicalRange({ from: sym.barCount - VISIBLE_BARS, to: sym.barCount - 1 });
+      }
+
+      function parseCsv(text) {
+        const bars = [];
+        const seen = new Set();
+        for (const raw of text.split(/\r?\n/)) {
+          const line = raw.trim();
+          if (!line) continue;
+          const p = line.split(",");
+          if (p.length < 6) continue;
+          const date = p[1];
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+          if (seen.has(date)) continue;
+          seen.add(date);
+          const o = +p[2], h = +p[3], l = +p[4], c = +p[5];
+          if ([o, h, l, c].some(n => !Number.isFinite(n))) continue;
+          bars.push({ time: date, open: o, high: h, low: l, close: c });
+        }
+        bars.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+        return bars;
+      }
+
+      function setStatus(kind, msg) {
+        statusEl.className = "pill " + kind;
+        statusEl.textContent = msg;
+      }
+
+      async function fetchOne(sym) {
+        const url = "/api/data?symbol=" + encodeURIComponent(sym.name) + "&_=" + Date.now();
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(sym.name + " HTTP " + res.status);
+        const bars = parseCsv(await res.text());
+        if (!bars.length) throw new Error(sym.name + " no bars");
+        const last = bars[bars.length - 1];
+        const sig = bars.length + "|" + last.time + "|" + last.close;
+        if (sig !== sym.sig) {
+          sym.series.setData(bars);
+          sym.barCount = bars.length;
+          applyRange(sym);
+          sym.sig = sig;
+          sym.badgeEl.textContent = last.close.toFixed(0);
+          sym.badgeEl.className = "badge " + (last.close >= 50 ? "up" : "down");
+          sym.dateEl.textContent = last.time;
+        }
+      }
+
+      async function tick() {
+        const results = await Promise.allSettled(symbols.map(fetchOne));
+        const failed = results.filter(r => r.status === "rejected");
+        updatedEl.textContent = new Date().toLocaleTimeString();
+        if (failed.length === 0) setStatus("ok", "live");
+        else if (failed.length < symbols.length) setStatus("ok", `live (${failed.length} failed)`);
+        else setStatus("err", "error: " + failed[0].reason.message);
+      }
+
+      tick();
+
+      const es = new EventSource("/api/events");
+      es.addEventListener("sync", () => tick());
+
+      fetch("/api/auth/me").then(async (res) => {
+        if (res.ok) {
+          const body = await res.json();
+          document.getElementById("who").textContent = body.email;
+        }
+      });
+      document.getElementById("logout").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        location.href = "/login/";
+      });
+    </script>
+  </body>
+</html>

@@ -67,10 +67,22 @@ background task (`app/tasks.py`) fetches every symbol in `ALLOWED_SYMBOLS` on
 a `SYNC_INTERVAL_SECONDS` interval (default **3600 s**) and `SET`s the payload
 with the refresh TTL.
 
-The frontend calls `/api/data?symbol=$S5FD` every 5 s per cell; that endpoint
-reads straight from Redis — so client polls never hit Barchart, and the rate
-at which we touch Barchart is a fixed 15 requests per hour no matter how many
-viewers are connected.
+The frontend calls `/api/data?symbol=$S5FD` per cell; that endpoint reads
+straight from Redis — so client polls never hit Barchart, and the rate at
+which we touch Barchart is a fixed 15 requests per hour no matter how many
+viewers are connected. The client is notified of fresh data via an SSE stream
+at `/api/events`.
+
+### Auth
+
+- User accounts live in Postgres (`users` table: `id`, `email`, `password_hash`,
+  `created_at`). Passwords are hashed with bcrypt.
+- Sessions are opaque IDs stored in Redis (`session:<sid>` → `{user_id, email}`)
+  with a sliding TTL (default 7 days). The cookie is `session`, `httpOnly`,
+  `SameSite=Lax`.
+- A middleware in `app/main.py` gates `/breadth/*` (redirects to `/login/`) and
+  `/api/data` + `/api/events` (401). The landing page `/` is public; `/login/`
+  and `/register/` are static pages that POST to `/api/auth/{login,register}`.
 
 ## Project layout
 
@@ -78,15 +90,24 @@ viewers are connected.
 app/
   __init__.py
   __main__.py        # `python -m app` → uvicorn entry
-  config.py          # env, allow-listed symbols, query defaults
+  config.py          # env, allow-listed symbols, query defaults, session/DB urls
   barchart.py        # async cookie-primed httpx client (BarchartClient)
+  db.py              # async SQLAlchemy engine + DeclarativeBase + init_db
+  models.py          # User(id, email, password_hash, created_at)
   repository.py      # redis-backed set_bars / list_bars
+  security.py        # bcrypt hash/verify + redis-backed session helpers
+  auth.py            # /api/auth/{register,login,logout,me}
   tasks.py           # background sync_loop → cache all symbols every N sec
-  api.py             # FastAPI router: GET /api/data?symbol=... (reads cache)
-  main.py            # FastAPI app + lifespan + static mount at /
+  api.py             # FastAPI router: GET /api/data + SSE at /api/events
+  events.py          # in-process pub/sub for sync notifications
+  main.py            # FastAPI app + lifespan + auth middleware + static mount
 static/
-  index.html         # lightweight-charts matrix UI (no build step)
-compose.yaml         # redis:7-alpine + app container, wired via REDIS_URL
+  index.html         # public landing page with cards for each dashboard
+  login/index.html   # sign-in form
+  register/index.html# sign-up form
+  breadth/
+    index.html       # lightweight-charts matrix UI (auth required)
+compose.yaml         # postgres + redis + app, wired via DATABASE_URL/REDIS_URL
 Dockerfile
 Makefile
 requirements.txt
@@ -118,7 +139,7 @@ docker compose up -d
 # wait ~5s for the first tick
 google-chrome --headless --disable-gpu --hide-scrollbars \
   --window-size=1600,900 --screenshot=docs/screenshots/overview.png \
-  http://localhost:8000/
+  http://localhost:8000/breadth/
 ```
 
 Name convention used in this README:
@@ -133,6 +154,8 @@ Name convention used in this README:
 | `HOST`                  | `127.0.0.1`                | Set to `0.0.0.0` inside Docker                  |
 | `PORT`                  | `8000`                     |                                                 |
 | `REDIS_URL`             | `redis://localhost:6379/0` | Compose overrides host to `redis`               |
+| `DATABASE_URL`          | `postgresql+asyncpg://barchart:barchart@localhost:5432/barchart` | Compose overrides host to `db`                  |
+| `SESSION_TTL_SECONDS`   | `604800` (7 days)          | Session cookie + Redis TTL; sliding on each hit |
 | `SYNC_INTERVAL_SECONDS` | `3600`                     | How often the background task hits Barchart     |
 
 The symbol allow-list lives in `app/config.py:ALLOWED_SYMBOLS`. Add new

@@ -4,6 +4,7 @@ from datetime import date
 
 from .barchart import BarchartClient
 from .config import ALLOWED_SYMBOLS, SYNC_INTERVAL_SECONDS
+from .events import events
 from .repository import set_bars
 
 log = logging.getLogger("app.sync")
@@ -51,17 +52,18 @@ async def sync_all(client: BarchartClient) -> None:
     )
     total = sum(r for r in results if isinstance(r, int))
     log.info("synced %d rows across %d symbols", total, len(ALLOWED_SYMBOLS))
+    events.publish("sync")
 
 
 async def sync_loop(client: BarchartClient) -> None:
     while True:
+        try:
+            await asyncio.sleep(SYNC_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            raise
         try:
             await sync_all(client)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             log.exception("sync loop error: %s", e)
-        try:
-            await asyncio.sleep(SYNC_INTERVAL_SECONDS)
-        except asyncio.CancelledError:
-            raise

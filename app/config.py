@@ -6,6 +6,13 @@ PORT = int(os.environ.get("PORT", "8000"))
 SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "3600"))
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+asyncpg://barchart:barchart@localhost:5432/barchart",
+)
+
+SESSION_COOKIE = "session"
+SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", str(60 * 60 * 24 * 7)))
 
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
