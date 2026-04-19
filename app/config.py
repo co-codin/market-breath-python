@@ -37,8 +37,14 @@ QUERY_DEFAULTS = {
     "padded": "false",
 }
 
-ALLOWED_SYMBOLS = frozenset({
-    "$S5FD", "$S5TW", "$S5FI", "$S5OH", "$S5TH",
-    "$NDFD", "$NDTW", "$NDFI", "$NDOH", "$NDTH",
-    "$NCFD", "$NCTW", "$NCFI", "$NCOH", "$NCTH",
-})
+SYMBOLS: dict[str, dict[str, str]] = {
+    # Market breadth — daily % of stocks above N-day MA
+    **{s: {"data": "daily"} for s in [
+        "$S5FD", "$S5TW", "$S5FI", "$S5OH", "$S5TH",
+        "$NDFD", "$NDTW", "$NDFI", "$NDOH", "$NDTH",
+        "$NCFD", "$NCTW", "$NCFI", "$NCOH", "$NCTH",
+    ]},
+    # CBOE Put/Call ratio — weekly
+    "$CPC": {"data": "weekly"},
+}
+ALLOWED_SYMBOLS = frozenset(SYMBOLS.keys())

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Put/Call Ratio — Market Breadth</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: #111821;
+        --fg: #d7dee6;
+        --muted: #7e8a99;
+        --border: #1e2733;
+        --accent: #42a5f5;
+        --up: #26a69a;
+        --down: #ef5350;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px/1.4 system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
+
+      header {
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      header .back { text-decoration: none; color: var(--muted); font-size: 16px; padding: 0 6px; border-radius: 4px; }
+      header .back:hover { color: var(--fg); background: #1a2431; }
+      header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .4px; }
+      header .spacer { flex: 1 1 auto; }
+      header .stat { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+      header .stat b { color: var(--fg); font-weight: 600; font-size: 13px; }
+      header .stat.up b { color: var(--up); }
+      header .stat.down b { color: var(--down); }
+      header .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 11px; }
+      header .pill.ok { color: var(--up); }
+      header .pill.err { color: var(--down); }
+      header .who { color: var(--muted); font-size: 11px; }
+      header .logout { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+      header .logout:hover { color: var(--fg); border-color: var(--fg); }
+
+      main { flex: 1 1 auto; min-height: 0; padding: 10px; }
+      #chart { width: 100%; height: 100%; }
+
+      .legend {
+        position: absolute;
+        bottom: 16px;
+        right: 20px;
+        padding: 8px 10px;
+        background: rgba(17, 24, 33, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 11px;
+        color: var(--muted);
+        pointer-events: none;
+      }
+      .legend .row { display: flex; align-items: center; gap: 8px; }
+      .legend .sw { width: 16px; height: 2px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="back" title="Back to dashboards">←</a>
+      <h1>CBOE Put/Call Ratio — weekly</h1>
+      <span id="status" class="pill">loading…</span>
+      <span class="spacer"></span>
+      <span class="stat"><span>last</span><b id="last">—</b></span>
+      <span id="chg" class="stat"><span>Δ</span><b id="chg-val">—</b></span>
+      <span class="stat"><span>as of</span><b id="date">—</b></span>
+      <span id="who" class="who"></span>
+      <button id="logout" class="logout" type="button">Sign out</button>
+    </header>
+
+    <main>
+      <div id="chart"></div>
+    </main>
+
+    <script>
+      const SYMBOL = "$CPC";
+      const chartEl = document.getElementById("chart");
+      const statusEl = document.getElementById("status");
+      const lastEl = document.getElementById("last");
+      const chgEl = document.getElementById("chg");
+      const chgValEl = document.getElementById("chg-val");
+      const dateEl = document.getElementById("date");
+
+      const chart = LightweightCharts.createChart(chartEl, {
+        layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6", fontSize: 11 },
+        grid: { vertLines: { color: "#141c26" }, horzLines: { color: "#141c26" } },
+        rightPriceScale: { borderColor: "#1e2733" },
+        timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      });
+      const series = chart.addLineSeries({
+        color: "#42a5f5",
+        lineWidth: 2,
+        priceLineVisible: true,
+        lastValueVisible: true,
+      });
+
+      // Reference levels: 0.7 neutral, 1.0 bearish-sentiment line
+      series.createPriceLine({
+        price: 0.7,
+        color: "rgba(126, 138, 153, 0.7)",
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "neutral",
+      });
+      series.createPriceLine({
+        price: 1.0,
+        color: "rgba(239, 83, 80, 0.7)",
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "bearish",
+      });
+
+      new ResizeObserver(() => {
+        chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight });
+      }).observe(chartEl);
+
+      function parseCsv(text) {
+        const points = [];
+        const seen = new Set();
+        for (const raw of text.split(/\r?\n/)) {
+          const line = raw.trim();
+          if (!line) continue;
+          const p = line.split(",");
+          if (p.length < 6) continue;
+          const date = p[1];
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+          if (seen.has(date)) continue;
+          seen.add(date);
+          const close = +p[5];
+          if (!Number.isFinite(close)) continue;
+          points.push({ time: date, value: close });
+        }
+        points.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+        return points;
+      }
+
+      function setStatus(kind, msg) {
+        statusEl.className = "pill " + kind;
+        statusEl.textContent = msg;
+      }
+
+      let sig = "";
+      async function tick() {
+        try {
+          const res = await fetch(`/api/data?symbol=${encodeURIComponent(SYMBOL)}&_=${Date.now()}`);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const points = parseCsv(await res.text());
+          if (!points.length) throw new Error("no data");
+          const last = points[points.length - 1];
+          const prev = points.length >= 2 ? points[points.length - 2] : null;
+          const newSig = points.length + "|" + last.time + "|" + last.value;
+          if (newSig !== sig) {
+            series.setData(points);
+            chart.timeScale().fitContent();
+            sig = newSig;
+            lastEl.textContent = last.value.toFixed(2);
+            dateEl.textContent = last.time;
+            if (prev) {
+              const d = last.value - prev.value;
+              chgValEl.textContent = (d >= 0 ? "+" : "") + d.toFixed(2);
+              chgEl.className = "stat " + (d >= 0 ? "down" : "up"); // rising ratio = more bearish
+            }
+          }
+          setStatus("ok", "live");
+        } catch (e) {
+          setStatus("err", "error: " + e.message);
+        }
+      }
+
+      tick();
+      const es = new EventSource("/api/events");
+      es.addEventListener("sync", () => tick());
+
+      fetch("/api/auth/me").then(async (res) => {
+        if (res.ok) {
+          const body = await res.json();
+          document.getElementById("who").textContent = body.email;
+        }
+      });
+      document.getElementById("logout").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        location.href = "/login/";
+      });
+    </script>
+  </body>
+</html>

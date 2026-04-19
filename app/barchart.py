@@ -53,9 +53,9 @@ class BarchartClient:
             self._xsrf = urllib.parse.unquote(xsrf) if xsrf else None
             self._primed_at = time.monotonic()
 
-    async def _do_fetch(self, symbol: str) -> tuple[int, bytes]:
+    async def _do_fetch(self, symbol: str, overrides: dict | None = None) -> tuple[int, bytes]:
         assert self._client is not None
-        params = {"symbol": symbol, **QUERY_DEFAULTS}
+        params = {"symbol": symbol, **QUERY_DEFAULTS, **(overrides or {})}
         resp = await self._client.get(
             BARCHART_QUERY_URL,
             params=params,
@@ -69,12 +69,12 @@ class BarchartClient:
         resp.raise_for_status()
         return resp.status_code, resp.content
 
-    async def fetch_csv(self, symbol: str) -> tuple[int, bytes]:
+    async def fetch_csv(self, symbol: str, overrides: dict | None = None) -> tuple[int, bytes]:
         await self._ensure_primed()
         try:
-            return await self._do_fetch(symbol)
+            return await self._do_fetch(symbol, overrides)
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
                 await self._ensure_primed(force=True)
-                return await self._do_fetch(symbol)
+                return await self._do_fetch(symbol, overrides)
             raise

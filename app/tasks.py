@@ -3,7 +3,7 @@ import logging
 from datetime import date
 
 from .barchart import BarchartClient
-from .config import ALLOWED_SYMBOLS, SYNC_INTERVAL_SECONDS
+from .config import SYMBOLS, SYNC_INTERVAL_SECONDS
 from .events import events
 from .repository import set_bars
 
@@ -36,9 +36,9 @@ def parse_csv(body: bytes) -> list[dict]:
     return list(rows.values())
 
 
-async def sync_symbol(client: BarchartClient, symbol: str) -> int:
+async def sync_symbol(client: BarchartClient, symbol: str, overrides: dict | None = None) -> int:
     try:
-        _status, body = await client.fetch_csv(symbol)
+        _status, body = await client.fetch_csv(symbol, overrides)
     except Exception as e:
         log.warning("fetch failed %s: %s", symbol, e)
         return 0
@@ -47,11 +47,11 @@ async def sync_symbol(client: BarchartClient, symbol: str) -> int:
 
 async def sync_all(client: BarchartClient) -> None:
     results = await asyncio.gather(
-        *[sync_symbol(client, s) for s in sorted(ALLOWED_SYMBOLS)],
+        *[sync_symbol(client, s, overrides) for s, overrides in sorted(SYMBOLS.items())],
         return_exceptions=True,
     )
     total = sum(r for r in results if isinstance(r, int))
-    log.info("synced %d rows across %d symbols", total, len(ALLOWED_SYMBOLS))
+    log.info("synced %d rows across %d symbols", total, len(SYMBOLS))
     events.publish("sync")
 
 

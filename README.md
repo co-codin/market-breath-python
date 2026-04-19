@@ -21,6 +21,9 @@ N-day moving average":
 | Nasdaq 100 | `$NDFD` | `$NDTW` | `$NDFI` | `$NDOH` | `$NDTH` |
 | NYSE       | `$NCFD` | `$NCTW` | `$NCFI` | `$NCOH` | `$NCTH` |
 
+Plus the CBOE Put/Call Ratio (`$CPC`), pulled on a **weekly** cadence and
+served at `/put-call/`.
+
 ![Cell detail](docs/screenshots/cell.png)
 
 ## Run it
@@ -116,6 +119,8 @@ static/
   register/index.html# sign-up form
   breadth/
     index.html       # lightweight-charts matrix UI (auth required)
+  put-call/
+    index.html       # weekly CBOE put/call ratio line chart (auth required)
 compose.yaml         # postgres + redis + app, wired via DATABASE_URL/REDIS_URL
 Dockerfile
 Makefile
@@ -198,5 +203,6 @@ Copy `.env.example` to `.env` and edit. `.env` is gitignored.
 | `SESSION_TTL_SECONDS`   | `604800` (7 days)          | Session cookie + Redis TTL; sliding on each hit |
 | `SYNC_INTERVAL_SECONDS` | `3600`                     | How often the background task hits Barchart     |
 
-The symbol allow-list lives in `app/config.py:ALLOWED_SYMBOLS`. Add new
-symbols there to expose them through `/api/data`.
+The symbol map lives in `app/config.py:SYMBOLS` — a dict keyed by symbol with
+per-symbol query overrides (e.g. `{"data": "weekly"}` for `$CPC`). Add new
+entries there to expose them through `/api/data`.
