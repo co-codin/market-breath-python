@@ -147,6 +147,19 @@ Name convention used in this README:
 - `docs/screenshots/overview.png` — full matrix
 - `docs/screenshots/cell.png` — one cell close-up
 
+## Tests
+
+End-to-end tests hit a running `docker compose up` stack over HTTP. Install
+dev deps once, then run:
+
+```bash
+make install-dev
+make test
+```
+
+The rate-limit test needs to reach Redis directly — `compose.yaml` exposes
+Redis on `127.0.0.1:6379` for that purpose.
+
 ## Configuration
 
 | Env var                 | Default                    | Notes                                           |

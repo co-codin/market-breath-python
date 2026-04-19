@@ -3,7 +3,7 @@ SERVICE ?= barchart
 REDIS   ?= redis
 PORT    ?= 8000
 
-.PHONY: help run install build up down restart logs shell ps redis-up redis-cli flush clean
+.PHONY: help run install install-dev test build up down restart logs shell ps redis-up redis-cli flush clean
 
 help:
 	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -13,6 +13,12 @@ run: ## Run the server locally (expects a reachable Redis; see redis-up)
 
 install: ## Install Python deps into the active environment
 	pip install -r requirements.txt
+
+install-dev: ## Install test/dev deps (pytest, etc.)
+	pip install -r requirements-dev.txt
+
+test: ## Run the test suite (requires docker compose stack running)
+	pytest
 
 build: ## Build the Docker image
 	docker compose build

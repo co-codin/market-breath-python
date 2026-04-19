@@ -10,6 +10,7 @@ from .config import SESSION_COOKIE, SESSION_TTL_SECONDS
 from .db import SessionLocal
 from .models import User
 from .security import (
+    check_rate_limit,
     create_session,
     delete_session,
     get_session,
@@ -56,12 +57,19 @@ def _clear_cookie(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/")
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/register")
 async def register(
     body: Credentials,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    if not await check_rate_limit("register", _client_ip(request)):
+        raise HTTPException(status_code=429, detail="too many attempts, try again later")
     user = User(email=body.email, password_hash=hash_password(body.password))
     db.add(user)
     try:
@@ -78,9 +86,12 @@ async def register(
 @router.post("/login")
 async def login(
     body: Credentials,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    if not await check_rate_limit("login", _client_ip(request)):
+        raise HTTPException(status_code=429, detail="too many attempts, try again later")
     row = (await db.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
     if row is None or not verify_password(body.password, row.password_hash):
         raise HTTPException(status_code=401, detail="invalid email or password")

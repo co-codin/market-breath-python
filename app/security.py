@@ -6,6 +6,22 @@ import bcrypt
 from .config import SESSION_TTL_SECONDS
 from .repository import _redis
 
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_ATTEMPTS = 10
+
+
+async def check_rate_limit(
+    scope: str,
+    key: str,
+    max_attempts: int = RATE_LIMIT_MAX_ATTEMPTS,
+    window: int = RATE_LIMIT_WINDOW_SECONDS,
+) -> bool:
+    bucket = f"ratelimit:{scope}:{key}"
+    count = await _redis().incr(bucket)
+    if count == 1:
+        await _redis().expire(bucket, window)
+    return count <= max_attempts
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
