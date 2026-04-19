@@ -58,7 +58,9 @@
       }
       .row-head { writing-mode: vertical-rl; transform: rotate(180deg); }
 
-      .cell { background: var(--bg); position: relative; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+      .cell { background: var(--bg); position: relative; display: flex; flex-direction: column; overflow: hidden; min-width: 0; text-decoration: none; color: inherit; cursor: pointer; transition: background .1s, outline .1s; }
+      .cell:hover { background: #0e141c; outline: 1px solid var(--fg); outline-offset: -1px; }
+      .cell:hover .head { background: #131c25; }
       .cell .head {
         display: flex; align-items: center; gap: 8px;
         padding: 5px 8px;
@@ -80,7 +82,7 @@
       }
       .badge.up { color: var(--up); background: rgba(38, 166, 154, 0.12); }
       .badge.down { color: var(--down); background: rgba(239, 83, 80, 0.12); }
-      .cell .chart { flex: 1 1 auto; min-height: 0; }
+      .cell .chart { flex: 1 1 auto; min-height: 0; pointer-events: none; }
     </style>
   </head>
   <body>
@@ -135,8 +137,10 @@
 
         for (const p of PERIODS) {
           const name = idx.prefix + p.key;
-          const cell = document.createElement("div");
+          const cell = document.createElement("a");
           cell.className = "cell";
+          cell.href = `/breadth/detail/?symbol=${encodeURIComponent(name)}`;
+          cell.title = `Open ${name}`;
           cell.innerHTML = `
             <div class="head">
               <span class="name">${name}</span>

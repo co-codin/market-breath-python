@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Breadth — detail</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: #111821;
+        --fg: #d7dee6;
+        --muted: #7e8a99;
+        --border: #1e2733;
+        --up: #26a69a;
+        --down: #ef5350;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px/1.4 system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
+
+      header {
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      header .back { text-decoration: none; color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: .3px; line-height: 1; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); background: #1a2431; }
+      header .back:hover { background: #243142; border-color: var(--fg); }
+      header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .4px; font-variant-numeric: tabular-nums; }
+      header .spacer { flex: 1 1 auto; }
+      header .stat { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+      header .stat b { color: var(--fg); font-weight: 600; font-size: 13px; }
+      header .pill { padding: 3px 8px; border-radius: 999px; background: #1a2431; color: var(--muted); font-size: 11px; }
+      header .pill.ok { color: var(--up); }
+      header .pill.err { color: var(--down); }
+      header .who { color: var(--muted); font-size: 11px; }
+      header .logout { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+      header .logout:hover { color: var(--fg); border-color: var(--fg); }
+
+      main { flex: 1 1 auto; min-height: 0; padding: 10px; }
+      #chart { width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/breadth/" class="back" title="Back to matrix">Breadth matrix</a>
+      <h1 id="title">—</h1>
+      <span id="status" class="pill">loading…</span>
+      <span class="spacer"></span>
+      <span class="stat"><span>last</span><b id="last">—</b></span>
+      <span class="stat"><span>as of</span><b id="date">—</b></span>
+      <span id="who" class="who"></span>
+      <button id="logout" class="logout" type="button">Sign out</button>
+    </header>
+
+    <main>
+      <div id="chart"></div>
+    </main>
+
+    <script>
+      const UP = "#26a69a";
+      const DOWN = "#ef5350";
+      const symbol = new URLSearchParams(location.search).get("symbol");
+
+      const titleEl = document.getElementById("title");
+      const statusEl = document.getElementById("status");
+      const lastEl = document.getElementById("last");
+      const dateEl = document.getElementById("date");
+      const chartEl = document.getElementById("chart");
+
+      titleEl.textContent = symbol || "(no symbol)";
+
+      function setStatus(kind, msg) {
+        statusEl.className = "pill " + kind;
+        statusEl.textContent = msg;
+      }
+
+      if (!symbol) {
+        setStatus("err", "missing ?symbol=");
+        throw new Error("no symbol");
+      }
+
+      const chart = LightweightCharts.createChart(chartEl, {
+        layout: { background: { color: "#0b0f14" }, textColor: "#d7dee6", fontSize: 11 },
+        grid: { vertLines: { color: "#141c26" }, horzLines: { color: "#141c26" } },
+        rightPriceScale: { borderColor: "#1e2733" },
+        timeScale: { borderColor: "#1e2733", timeVisible: false, secondsVisible: false },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      });
+      const series = chart.addCandlestickSeries({
+        upColor: UP, downColor: DOWN,
+        borderUpColor: UP, borderDownColor: DOWN,
+        wickUpColor: UP, wickDownColor: DOWN,
+      });
+
+      new ResizeObserver(() => {
+        chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight });
+      }).observe(chartEl);
+
+      function parseCsv(text) {
+        const bars = [];
+        const seen = new Set();
+        for (const raw of text.split(/\r?\n/)) {
+          const line = raw.trim();
+          if (!line) continue;
+          const p = line.split(",");
+          if (p.length < 6) continue;
+          const date = p[1];
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+          if (seen.has(date)) continue;
+          seen.add(date);
+          const o = +p[2], h = +p[3], l = +p[4], c = +p[5];
+          if ([o, h, l, c].some(n => !Number.isFinite(n))) continue;
+          bars.push({ time: date, open: o, high: h, low: l, close: c });
+        }
+        bars.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+        return bars;
+      }
+
+      let sig = "";
+      async function tick() {
+        try {
+          const res = await fetch(`/api/data?symbol=${encodeURIComponent(symbol)}&_=${Date.now()}`);
+          if (res.status === 400) {
+            setStatus("err", "unknown symbol");
+            return;
+          }
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const bars = parseCsv(await res.text());
+          if (!bars.length) throw new Error("no data");
+          const last = bars[bars.length - 1];
+          const newSig = bars.length + "|" + last.time + "|" + last.close;
+          if (newSig !== sig) {
+            series.setData(bars);
+            chart.timeScale().fitContent();
+            sig = newSig;
+            lastEl.textContent = last.close.toFixed(1);
+            dateEl.textContent = last.time;
+          }
+          setStatus("ok", "live");
+        } catch (e) {
+          setStatus("err", "error: " + e.message);
+        }
+      }
+
+      tick();
+      const es = new EventSource("/api/events");
+      es.addEventListener("sync", () => tick());
+
+      fetch("/api/auth/me").then(async (res) => {
+        if (res.ok) {
+          const body = await res.json();
+          document.getElementById("who").textContent = body.email;
+        }
+      });
+      document.getElementById("logout").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        location.href = "/login/";
+      });
+    </script>
+  </body>
+</html>
