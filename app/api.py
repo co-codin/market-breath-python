@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api")
 async def data(symbol: str = Query(default="$S5FD")) -> Response:
     if symbol not in ALLOWED_SYMBOLS:
         raise HTTPException(status_code=400, detail="symbol not allowed")
-    bars = list_bars(symbol)
+    bars = await list_bars(symbol)
     lines = [
         f"{b['symbol']},{b['date'].isoformat()},{b['open']},{b['high']},{b['low']},{b['close']},{b['volume']}"
         for b in bars

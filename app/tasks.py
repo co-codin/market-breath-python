@@ -41,7 +41,7 @@ async def sync_symbol(client: BarchartClient, symbol: str) -> int:
     except Exception as e:
         log.warning("fetch failed %s: %s", symbol, e)
         return 0
-    return set_bars(symbol, parse_csv(body))
+    return await set_bars(symbol, parse_csv(body))
 
 
 async def sync_all(client: BarchartClient) -> None:

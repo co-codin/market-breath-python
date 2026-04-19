@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: barchart-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   barchart:
     build: .
     image: barchart-candles
@@ -6,8 +17,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      SYNC_INTERVAL_SECONDS: "300"
+      REDIS_URL: "redis://redis:6379/0"
+      SYNC_INTERVAL_SECONDS: "3600"
     volumes:
       - ./static:/app/static:ro
       - ./app:/app/app:ro
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped

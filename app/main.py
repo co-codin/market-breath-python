@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import router as api_router
 from .barchart import BarchartClient
+from .repository import close_redis
 from .tasks import sync_loop
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         await client.close()
+        await close_redis()
 
 
 app = FastAPI(title="Market Breadth", lifespan=lifespan)
