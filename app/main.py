@@ -7,7 +7,6 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import router as api_router
 from .barchart import BarchartClient
-from .db import close_db, init_db
 from .tasks import sync_loop
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -15,7 +14,6 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
     client = BarchartClient()
     app.state.barchart = client
     task = asyncio.create_task(sync_loop(client))
@@ -28,7 +26,6 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         await client.close()
-        await close_db()
 
 
 app = FastAPI(title="Market Breadth", lifespan=lifespan)

@@ -1,12 +1,10 @@
 import asyncio
 import logging
 from datetime import date
-from decimal import Decimal, InvalidOperation
 
 from .barchart import BarchartClient
 from .config import ALLOWED_SYMBOLS, SYNC_INTERVAL_SECONDS
-from .db import SessionLocal
-from .repository import upsert_bars
+from .repository import set_bars
 
 log = logging.getLogger("app.sync")
 
@@ -25,13 +23,13 @@ def parse_csv(body: bytes) -> list[dict]:
             row = {
                 "symbol": sym,
                 "date": bar_date,
-                "open": Decimal(parts[2]),
-                "high": Decimal(parts[3]),
-                "low": Decimal(parts[4]),
-                "close": Decimal(parts[5]),
+                "open": float(parts[2]),
+                "high": float(parts[3]),
+                "low": float(parts[4]),
+                "close": float(parts[5]),
                 "volume": int(parts[6]) if len(parts) > 6 and parts[6] else 0,
             }
-        except (ValueError, InvalidOperation):
+        except ValueError:
             continue
         rows[(sym, bar_date)] = row
     return list(rows.values())
@@ -43,9 +41,7 @@ async def sync_symbol(client: BarchartClient, symbol: str) -> int:
     except Exception as e:
         log.warning("fetch failed %s: %s", symbol, e)
         return 0
-    rows = parse_csv(body)
-    async with SessionLocal() as session:
-        return await upsert_bars(session, rows)
+    return set_bars(symbol, parse_csv(body))
 
 
 async def sync_all(client: BarchartClient) -> None:

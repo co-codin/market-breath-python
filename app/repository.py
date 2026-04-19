@@ -1,30 +1,12 @@
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date as _date
 
-from .models import Bar
+_store: dict[str, list[dict]] = {}
 
 
-async def upsert_bars(session: AsyncSession, rows: list[dict]) -> int:
-    if not rows:
-        return 0
-    stmt = pg_insert(Bar).values(rows)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[Bar.symbol, Bar.date],
-        set_={
-            "open": stmt.excluded.open,
-            "high": stmt.excluded.high,
-            "low": stmt.excluded.low,
-            "close": stmt.excluded.close,
-            "volume": stmt.excluded.volume,
-        },
-    )
-    await session.execute(stmt)
-    await session.commit()
-    return len(rows)
+def set_bars(symbol: str, rows: list[dict]) -> int:
+    _store[symbol] = sorted(rows, key=lambda r: r["date"])
+    return len(_store[symbol])
 
 
-async def list_bars(session: AsyncSession, symbol: str) -> list[Bar]:
-    stmt = select(Bar).where(Bar.symbol == symbol).order_by(Bar.date.asc())
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
+def list_bars(symbol: str) -> list[dict]:
+    return _store.get(symbol, [])
