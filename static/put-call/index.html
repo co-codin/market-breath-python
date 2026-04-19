@@ -30,8 +30,9 @@
         gap: 12px;
         flex-wrap: wrap;
       }
-      header .back { text-decoration: none; color: var(--muted); font-size: 16px; padding: 0 6px; border-radius: 4px; }
-      header .back:hover { color: var(--fg); background: #1a2431; }
+      header .back { text-decoration: none; color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: .3px; line-height: 1; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); background: #1a2431; display: inline-flex; align-items: center; gap: 8px; }
+      header .back:hover { background: #243142; border-color: var(--fg); }
+      header .back .arrow { font-size: 18px; }
       header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .4px; }
       header .spacer { flex: 1 1 auto; }
       header .stat { color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
@@ -66,7 +67,7 @@
   </head>
   <body>
     <header>
-      <a href="/" class="back" title="Back to dashboards">←</a>
+      <a href="/" class="back" title="Back to dashboards">Dashboards</a>
       <h1>CBOE Put/Call Ratio — weekly</h1>
       <span id="status" class="pill">loading…</span>
       <span class="spacer"></span>
